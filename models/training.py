@@ -7,16 +7,11 @@ from config import (
 from data.sampling import (
     collect_binary_branch_samples, collect_multiclass_samples,
 )
-from models.hierarchical_model import BinaryLogGMMBranch, HierarchicalGMMModel
+from models.fusion_model import (
+    BoundarySymmetryFusionModel, ProtectedHierarchicalFusionModel,
+)
+from models.hierarchical_model import BinaryLogGMMBranch
 from models.log_gmm import LogSpaceGMMClassifier
-
-
-FEATURE_MODELS = {
-    "Raw (4D)": "raw",
-    "Boundary distance (5D)": "distance",
-    "Symmetry (8D)": "symmetry",
-    "Combined features (9D)": "combined",
-}
 
 
 def _slug(name):
@@ -26,12 +21,19 @@ def _slug(name):
     )
 
 
-def train_feature_model(name, feature_kind, train_ids, force=False):
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
+def train_feature_model(
+    name,
+    feature_kind,
+    train_ids,
+    force=False,
+    artifact_dir=MODEL_DIR,
+):
+    artifact_dir = Path(artifact_dir)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
     artifact_name = _slug(name)
-    if feature_kind in {"symmetry", "combined"}:
+    if feature_kind == "symmetry":
         artifact_name += "_dataset_axis0_v3"
-    path = MODEL_DIR / f"{artifact_name}.joblib"
+    path = artifact_dir / f"{artifact_name}.joblib"
     if path.exists() and not force:
         return LogSpaceGMMClassifier.load(path)
 
@@ -51,10 +53,15 @@ def train_feature_model(name, feature_kind, train_ids, force=False):
     return model
 
 
-def train_hierarchical_branches(train_ids, force=False):
-    MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    outer_path = MODEL_DIR / "hierarchical_outer_flair_t2.joblib"
-    core_path = MODEL_DIR / "hierarchical_core_t1_t1ce.joblib"
+def train_hierarchical_branches(
+    train_ids,
+    force=False,
+    artifact_dir=MODEL_DIR,
+):
+    artifact_dir = Path(artifact_dir)
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    outer_path = artifact_dir / "hierarchical_outer_flair_t2.joblib"
+    core_path = artifact_dir / "hierarchical_core_t1_t1ce.joblib"
 
     if outer_path.exists() and core_path.exists() and not force:
         return (
@@ -93,24 +100,38 @@ def train_hierarchical_branches(train_ids, force=False):
     return outer, core
 
 
-def train_or_load_models(train_ids, force=False):
-    raw = train_feature_model("Raw (4D)", "raw", train_ids, force)
-    distance = train_feature_model(
-        "Boundary distance (5D)", "distance", train_ids, force
+def train_or_load_models(
+    train_ids,
+    force=False,
+    artifact_scope="selection",
+):
+    artifact_dir = MODEL_DIR / artifact_scope
+    raw = train_feature_model(
+        "Raw (4D)", "raw", train_ids, force, artifact_dir
     )
-    symmetry = train_feature_model("Symmetry (8D)", "symmetry", train_ids, force)
-    combined_features = train_feature_model(
-        "Combined features (9D)", "combined", train_ids, force
+    boundary = train_feature_model(
+        "Boundary distance (5D)", "distance", train_ids, force, artifact_dir
     )
-    outer, core = train_hierarchical_branches(train_ids, force)
+    symmetry = train_feature_model(
+        "Symmetry (8D)", "symmetry", train_ids, force, artifact_dir
+    )
+    outer, core = train_hierarchical_branches(
+        train_ids, force, artifact_dir
+    )
+    fusion = BoundarySymmetryFusionModel(
+        boundary, symmetry, "Boundary + Symmetry"
+    )
+    combined = ProtectedHierarchicalFusionModel(
+        boundary_model=boundary,
+        symmetry_model=symmetry,
+        name="Combined",
+        outer_branch=outer,
+        core_branch=core,
+    )
     return {
         "Raw (4D)": raw,
-        "Boundary distance (5D)": distance,
+        "Boundary distance (5D)": boundary,
         "Symmetry (8D)": symmetry,
-        "Hierarchical modalities": HierarchicalGMMModel(
-            raw, outer, core, "Hierarchical modalities"
-        ),
-        "Combined": HierarchicalGMMModel(
-            combined_features, outer, core, "Combined"
-        ),
+        "Boundary + Symmetry": fusion,
+        "Combined": combined,
     }
