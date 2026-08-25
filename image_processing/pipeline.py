@@ -63,6 +63,10 @@ def segment_posteriors(
         "posteriors": posteriors,
         "tumor_posterior": tumor_posterior,
         "base_tumor_posterior": base_posterior,
+        "hierarchy_probability": (
+            guidance.get("hierarchy_probability")
+            if guidance is not None else None
+        ),
         "entropy": entropy,
         "edge_map": posterior_edge_map(tumor_posterior, brain_mask),
         "candidate_support": support,
