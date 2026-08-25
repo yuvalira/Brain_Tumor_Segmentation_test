@@ -154,8 +154,8 @@ def plot_pipeline_diagnostic(details, output_path=None):
     titles = [
         "FLAIR",
         "Boundary-symmetry fusion",
-        "Hierarchy probability",
-        "Guided tumor posterior",
+        "Hierarchy confirmation evidence",
+        "Fused tumor posterior",
         "Entropy",
         "Sobel diagnostic",
         "Candidate support",
