@@ -1,0 +1,11 @@
+# Authors: Yuval Ratzabi (ID: TODO), second student (ID: TODO)
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.env
+MRI_2026_datasets/
+saved_parameters/gmm_models/*.joblib
+output/diagnostics/
+output/figures/*.png
+output/validation/*.csv
+output/test/*.csv
