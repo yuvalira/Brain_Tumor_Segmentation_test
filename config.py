@@ -29,7 +29,6 @@ GMM_MAX_ITER = 200
 SYMMETRY_AXIS = 0
 SYMMETRY_BLUR_SIGMA = 2.0
 HIERARCHY_LOG_RATIO_CLIP = 3.0
-HIERARCHY_STRONG_BASE_NEGATIVE_SCALE = 0.25
 EPSILON = 1e-8
 
 SPLITS_DIR = PROJECT_ROOT / "splits"
@@ -50,7 +49,8 @@ MODEL_NAMES = (
 )
 
 DEFAULT_IMAGE_PROCESSING_PARAMS = {
-    "min_component_size": 12,
+    "min_component_size": 50,
+    "small_min_component_size": 8,
     "closing_size": 3,
     "max_expansion_distance": 40,
 }
@@ -59,6 +59,8 @@ DEFAULT_PROBABILITY_PARAMS = {
     "temperature": 1.0,
     "candidate_threshold": 0.20,
     "component_threshold": 0.50,
+    "small_component_q95_threshold": 0.85,
+    "slice_gate_threshold": 0.62,
     "entropy_expansion_threshold": 0.10,
     "posterior_expansion_threshold": 0.10,
 }
