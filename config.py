@@ -45,7 +45,7 @@ MODEL_NAMES = (
     "Raw (4D)",
     "Boundary distance (5D)",
     "Symmetry (8D)",
-    "Hierarchical modalities",
+    "Boundary + Symmetry",
     "Combined",
 )
 
