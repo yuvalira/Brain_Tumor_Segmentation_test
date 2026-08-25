@@ -10,11 +10,25 @@ from image_processing.component_classification import (
 from image_processing.seed_expansion import expand_components
 
 
-def segment_posteriors(posteriors, brain_mask, image_params, probability_params):
+def segment_posteriors(
+    posteriors,
+    brain_mask,
+    image_params,
+    probability_params,
+    guidance=None,
+):
     tumor_posterior = np.sum(posteriors[..., 1:], axis=-1)
     entropy = normalized_entropy(posteriors, brain_mask)
+    base_posterior = (
+        guidance["base_tumor_probability"] if guidance is not None else None
+    )
+    candidate_posterior = (
+        np.maximum(tumor_posterior, base_posterior)
+        if base_posterior is not None
+        else tumor_posterior
+    )
     components, support = extract_candidate_components(
-        tumor_posterior=tumor_posterior,
+        tumor_posterior=candidate_posterior,
         brain_mask=brain_mask,
         candidate_threshold=probability_params["candidate_threshold"],
         min_component_size=image_params["min_component_size"],
@@ -25,10 +39,19 @@ def segment_posteriors(posteriors, brain_mask, image_params, probability_params)
         tumor_posterior=tumor_posterior,
         entropy=entropy,
         threshold=probability_params["component_threshold"],
+        base_tumor_posterior=base_posterior,
+        hierarchy_probability=(
+            guidance.get("hierarchy_probability")
+            if guidance is not None else None
+        ),
+        protection_margin=(
+            guidance.get("protection_margin", 0.0)
+            if guidance is not None else 0.0
+        ),
     )
     segmentation = expand_components(
         accepted_components=accepted_components,
-        tumor_posterior=tumor_posterior,
+        tumor_posterior=candidate_posterior,
         entropy=entropy,
         brain_mask=brain_mask,
         entropy_threshold=probability_params["entropy_expansion_threshold"],
@@ -39,6 +62,7 @@ def segment_posteriors(posteriors, brain_mask, image_params, probability_params)
         "prediction": segmentation,
         "posteriors": posteriors,
         "tumor_posterior": tumor_posterior,
+        "base_tumor_posterior": base_posterior,
         "entropy": entropy,
         "edge_map": posterior_edge_map(tumor_posterior, brain_mask),
         "candidate_support": support,
