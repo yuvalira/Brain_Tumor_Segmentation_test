@@ -48,6 +48,21 @@ def _zscore_channels(image, mask):
     return result
 
 
+def _mirror_about_brain_midline(array, brain_mask, axis=SYMMETRY_AXIS):
+    support = np.any(brain_mask, axis=1 - axis)
+    coordinates = np.flatnonzero(support)
+    if coordinates.size == 0:
+        return np.zeros_like(array)
+    center_sum = int(coordinates[0] + coordinates[-1])
+    indices = center_sum - np.arange(array.shape[axis])
+    valid = (indices >= 0) & (indices < array.shape[axis])
+    mirrored = np.take(array, np.clip(indices, 0, array.shape[axis] - 1), axis=axis)
+    invalid_slice = [slice(None)] * array.ndim
+    invalid_slice[axis] = ~valid
+    mirrored[tuple(invalid_slice)] = 0
+    return mirrored
+
+
 def load_preprocessed_slice(volume_id, slice_num=SLICE_NUM, dataset_dir=DATASET_DIR):
     path = slice_path(volume_id, slice_num, dataset_dir)
     if not path.exists():
@@ -72,8 +87,8 @@ def load_preprocessed_slice(volume_id, slice_num=SLICE_NUM, dataset_dir=DATASET_
     blurred = gaussian_filter(
         raw_image, sigma=(SYMMETRY_BLUR_SIGMA, SYMMETRY_BLUR_SIGMA, 0.0)
     )
-    mirrored = np.flip(blurred, axis=SYMMETRY_AXIS)
-    mirrored_brain = np.flip(brain_mask, axis=SYMMETRY_AXIS)
+    mirrored = _mirror_about_brain_midline(blurred, brain_mask)
+    mirrored_brain = _mirror_about_brain_midline(brain_mask, brain_mask)
     symmetric_brain = brain_mask & mirrored_brain
     denominator = np.abs(blurred) + np.abs(mirrored) + EPSILON
     symmetry_raw = np.clip((blurred - mirrored) / denominator, -1.0, 1.0)
