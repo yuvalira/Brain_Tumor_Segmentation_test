@@ -115,7 +115,9 @@ class ProtectedHierarchicalFusionModel(BoundarySymmetryFusionModel):
         hierarchy = np.clip(
             hierarchy, -HIERARCHY_LOG_RATIO_CLIP, HIERARCHY_LOG_RATIO_CLIP
         )
-        base_probability = expit(base_log_odds)
+        base_probability = _calibrated_probability(
+            base_log_odds, evidence["brain_mask"], probability_params
+        )
         protect_threshold = min(
             float(probability_params["component_threshold"]) + 0.10, 0.95
         )
