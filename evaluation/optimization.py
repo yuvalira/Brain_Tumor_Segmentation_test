@@ -14,6 +14,48 @@ from evaluation.evaluate import evaluate_model, prepare_evidence_cache
 from models.hierarchical_model import HierarchicalGMMModel
 
 
+_PARAMETER_REFERENCE = {
+    **DEFAULT_IMAGE_PROCESSING_PARAMS,
+    **DEFAULT_PROBABILITY_PARAMS,
+    "hierarchy_weight": 1.0,
+    "core_weight": 1.0,
+}
+_PARAMETER_SCALE = {
+    "min_component_size": 55.0,
+    "closing_size": 6.0,
+    "max_expansion_distance": 75.0,
+    "log_odds_offset": 16.0,
+    "temperature": 1.5,
+    "candidate_threshold": 0.50,
+    "component_threshold": 0.60,
+    "entropy_expansion_threshold": 0.48,
+    "posterior_expansion_threshold": 0.43,
+    "hierarchy_weight": 2.0,
+    "core_weight": 3.75,
+}
+
+
+def _parameter_distance(params):
+    differences = [
+        ((float(value) - _PARAMETER_REFERENCE[name]) / _PARAMETER_SCALE[name]) ** 2
+        for name, value in params.items()
+        if name in _PARAMETER_REFERENCE
+    ]
+    return sum(differences) / max(len(differences), 1)
+
+
+def _record_selection_diagnostics(trial, summary):
+    trial.set_user_attr("missed_tumors", summary["missed_tumors"])
+    trial.set_user_attr(
+        "empty_slice_false_positives",
+        summary["empty_slice_false_positives"],
+    )
+    trial.set_user_attr("dice_std", summary["dice_std"])
+    trial.set_user_attr(
+        "parameter_distance", _parameter_distance(trial.params)
+    )
+
+
 def _suggest_probability_params(trial, hierarchical=False):
     params = {
         "log_odds_offset": trial.suggest_float("log_odds_offset", -8.0, 8.0),
@@ -41,7 +83,7 @@ def _suggest_probability_params(trial, hierarchical=False):
     return params
 
 
-def _select_trial(study, tolerance=0.002):
+def _select_trial(study, tolerance=0.005):
     completed = [
         trial for trial in study.trials
         if trial.value is not None and trial.state == optuna.trial.TrialState.COMPLETE
@@ -55,6 +97,8 @@ def _select_trial(study, tolerance=0.002):
         key=lambda trial: (
             trial.user_attrs["missed_tumors"],
             trial.user_attrs["empty_slice_false_positives"],
+            trial.user_attrs["parameter_distance"],
+            trial.user_attrs["dice_std"],
             -trial.value,
         ),
     )
@@ -80,11 +124,7 @@ def optimize_baseline(model, validation_ids, n_trials=60):
             model, validation_ids, image_params, probability_params, cache
         )
         summary = result["summary"]
-        trial.set_user_attr("missed_tumors", summary["missed_tumors"])
-        trial.set_user_attr(
-            "empty_slice_false_positives",
-            summary["empty_slice_false_positives"],
-        )
+        _record_selection_diagnostics(trial, summary)
         return summary["dice_mean"]
 
     study = optuna.create_study(
@@ -130,11 +170,7 @@ def optimize_advanced_model(
             cache,
         )
         summary = result["summary"]
-        trial.set_user_attr("missed_tumors", summary["missed_tumors"])
-        trial.set_user_attr(
-            "empty_slice_false_positives",
-            summary["empty_slice_false_positives"],
-        )
+        _record_selection_diagnostics(trial, summary)
         return summary["dice_mean"]
 
     study = optuna.create_study(
@@ -161,8 +197,10 @@ def save_selected_parameters(
     payload = {
         "workflow_version": "central_slice_log_gmm_components_v1",
         "selection_rule": (
-            "Maximize validation mean Dice; within 0.002 of the maximum, "
-            "prefer fewer missed tumors and then fewer empty-slice false positives."
+            "Maximize validation mean Dice; within 0.005 of the maximum, "
+            "prefer fewer missed tumors, fewer empty-slice false positives, "
+            "parameters closer to the predefined defaults, and lower Dice variability."
+        )
         ),
         "frozen_image_processing_params": image_params,
         "model_probability_params": model_probability_params,
