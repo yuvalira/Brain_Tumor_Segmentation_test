@@ -36,7 +36,7 @@ HIERARCHY_STRONG_BASE_NEGATIVE_SCALE = 0.25
 EPSILON = 1e-8
 
 SPLITS_DIR = PROJECT_ROOT / "splits"
-CV_SPLITS_DIR = SPLITS_DIR / "nested_cv_v1"
+CV_SPLITS_DIR = SPLITS_DIR / "nested_cv_v2"
 MODEL_DIR = PROJECT_ROOT / "saved_parameters" / "gmm_models"
 SELECTED_PARAMETERS_PATH = PROJECT_ROOT / "saved_parameters" / "selected_parameters.json"
 OUTPUT_DIR = PROJECT_ROOT / "output"
@@ -44,7 +44,7 @@ VALIDATION_OUTPUT_DIR = OUTPUT_DIR / "validation"
 TEST_OUTPUT_DIR = OUTPUT_DIR / "test"
 FIGURES_DIR = OUTPUT_DIR / "figures"
 DIAGNOSTICS_DIR = OUTPUT_DIR / "diagnostics"
-CV_OUTPUT_DIR = OUTPUT_DIR / "nested_cv_v1"
+CV_OUTPUT_DIR = OUTPUT_DIR / "nested_cv_v2"
 
 MODEL_NAMES = (
     "Raw (4D)",
@@ -70,3 +70,4 @@ DEFAULT_PROBABILITY_PARAMS = {
     "entropy_expansion_threshold": 0.14,
     "posterior_expansion_threshold": 0.20,
 }
+

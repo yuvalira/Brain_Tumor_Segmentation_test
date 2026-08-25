@@ -6,8 +6,12 @@ __pycache__/
 MRI_2026_datasets/
 saved_parameters/gmm_models/*.joblib
 saved_parameters/gmm_models/nested_cv_v1/
+saved_parameters/gmm_models/nested_cv_v2/
+splits/nested_cv_v2/
 output/nested_cv_v1/
+output/nested_cv_v2/
 output/diagnostics/
 output/figures/*.png
 output/validation/*.csv
 output/test/*.csv
+

@@ -120,7 +120,7 @@ def run_outer_fold(
         if completed is not None:
             print(f"Reusing completed outer fold {fold_index}.")
             return completed
-    model_scope = f"nested_cv_v1/fold_{fold_index}"
+    model_scope = f"nested_cv_v2/fold_{fold_index}/selection"
     models = train_or_load_models(
         fold["train"], force=force_retrain_models, artifact_scope=model_scope
     )
@@ -156,10 +156,17 @@ def run_outer_fold(
         )
     validation_results["Combined"] = combined_result
 
+    development_ids = np.concatenate([fold["train"], fold["validation"]])
+    final_models = train_or_load_models(
+        development_ids,
+        force=force_retrain_models,
+        artifact_scope=f"nested_cv_v2/fold_{fold_index}/final",
+    )
+
     test_results = {}
     for model_name in MODEL_NAMES:
         test_results[model_name] = evaluate_model(
-            models[model_name], fold["test"], image_params,
+            final_models[model_name], fold["test"], image_params,
             probability_params[model_name],
         )
         save_evaluation(
@@ -183,6 +190,7 @@ def run_outer_fold(
         "fold": fold_index,
         "train_patients": len(fold["train"]),
         "validation_patients": len(fold["validation"]),
+        "final_fit_patients": len(development_ids),
         "outer_test_patients": len(fold["test"]),
         "hierarchy_selected": hierarchy_selected,
         "hierarchy_candidate_validation_gain": hierarchy_gain,
@@ -292,9 +300,10 @@ def run_nested_cross_validation(
 
 
 def evaluate_saved_fold_models(fold, volume_ids, model_names=MODEL_NAMES):
+    development_ids = np.concatenate([fold["train"], fold["validation"]])
     models = train_or_load_models(
-        fold["train"], force=False,
-        artifact_scope=f"nested_cv_v1/fold_{int(fold['fold'])}",
+        development_ids, force=False,
+        artifact_scope=f"nested_cv_v2/fold_{int(fold['fold'])}/final",
     )
     fold_dir = Path(CV_OUTPUT_DIR) / f"fold_{int(fold['fold'])}"
     selected = load_selected_parameters(fold_dir / "selected_parameters.json")
@@ -306,3 +315,4 @@ def evaluate_saved_fold_models(fold, volume_ids, model_names=MODEL_NAMES):
             return_details=True,
         ) for name in model_names
     }
+
