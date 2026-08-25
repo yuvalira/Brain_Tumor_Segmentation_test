@@ -16,27 +16,30 @@ from models.fusion_model import (
 )
 
 
-WORKFLOW_VERSION = "central_slice_fusion_hierarchy_v3"
+WORKFLOW_VERSION = "central_slice_component_gate_hierarchy_v4"
 _PARAMETER_REFERENCE = {
     **DEFAULT_IMAGE_PROCESSING_PARAMS,
     **DEFAULT_PROBABILITY_PARAMS,
     "fusion_weight": 0.5,
-    "hierarchy_weight": 0.75,
-    "core_weight": 1.0,
+    "hierarchy_confirmation_threshold": 0.70,
+    "outer_expansion_threshold": 0.75,
 }
 _PARAMETER_SCALE = {
     "min_component_size": 50.0,
+    "small_min_component_size": 20.0,
     "closing_size": 4.0,
     "max_expansion_distance": 40.0,
     "log_odds_offset": 6.0,
     "temperature": 0.8,
     "candidate_threshold": 0.40,
     "component_threshold": 0.40,
+    "small_component_q95_threshold": 0.28,
+    "slice_gate_threshold": 0.35,
     "entropy_expansion_threshold": 0.30,
     "posterior_expansion_threshold": 0.30,
     "fusion_weight": 0.8,
-    "hierarchy_weight": 1.5,
-    "core_weight": 1.75,
+    "hierarchy_confirmation_threshold": 0.40,
+    "outer_expansion_threshold": 0.45,
 }
 
 
@@ -56,22 +59,24 @@ def _record_selection_diagnostics(trial, summary):
         summary["empty_slice_false_positives"],
     )
     trial.set_user_attr("dice_std", summary["dice_std"])
-    trial.set_user_attr(
-        "parameter_distance", _parameter_distance(trial.params)
-    )
+    trial.set_user_attr("parameter_distance", _parameter_distance(trial.params))
 
 
 def _suggest_baseline_probability_params(trial):
     return {
-        "log_odds_offset": trial.suggest_float(
-            "log_odds_offset", -3.0, 3.0
-        ),
+        "log_odds_offset": trial.suggest_float("log_odds_offset", -3.0, 3.0),
         "temperature": trial.suggest_float("temperature", 0.7, 1.5),
         "candidate_threshold": trial.suggest_float(
             "candidate_threshold", 0.10, 0.50
         ),
         "component_threshold": trial.suggest_float(
             "component_threshold", 0.35, 0.75
+        ),
+        "small_component_q95_threshold": trial.suggest_float(
+            "small_component_q95_threshold", 0.70, 0.98
+        ),
+        "slice_gate_threshold": trial.suggest_float(
+            "slice_gate_threshold", 0.50, 0.85
         ),
         "entropy_expansion_threshold": trial.suggest_float(
             "entropy_expansion_threshold", 0.05, 0.35
@@ -84,20 +89,18 @@ def _suggest_baseline_probability_params(trial):
 
 def _suggest_advanced_overrides(trial, model):
     overrides = {
-        "log_odds_offset": trial.suggest_float(
-            "log_odds_offset", -3.0, 3.0
-        )
+        "log_odds_offset": trial.suggest_float("log_odds_offset", -3.0, 3.0)
     }
     if isinstance(model, BoundarySymmetryFusionModel):
         overrides["fusion_weight"] = trial.suggest_float(
             "fusion_weight", 0.10, 0.90
         )
     if isinstance(model, ProtectedHierarchicalFusionModel):
-        overrides["hierarchy_weight"] = trial.suggest_float(
-            "hierarchy_weight", 0.0, 1.5
+        overrides["hierarchy_confirmation_threshold"] = trial.suggest_float(
+            "hierarchy_confirmation_threshold", 0.50, 0.90
         )
-        overrides["core_weight"] = trial.suggest_float(
-            "core_weight", 0.25, 2.0, log=True
+        overrides["outer_expansion_threshold"] = trial.suggest_float(
+            "outer_expansion_threshold", 0.55, 0.95
         )
     return overrides
 
@@ -130,7 +133,10 @@ def optimize_baseline(model, validation_ids, n_trials=30):
     def objective(trial):
         image_params = {
             "min_component_size": trial.suggest_int(
-                "min_component_size", 10, 60
+                "min_component_size", 30, 80
+            ),
+            "small_min_component_size": trial.suggest_int(
+                "small_min_component_size", 5, 25
             ),
             "closing_size": trial.suggest_categorical(
                 "closing_size", [1, 3, 5]
@@ -158,11 +164,10 @@ def optimize_baseline(model, validation_ids, n_trials=30):
     study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
     selected_trial = _select_trial(study)
     image_keys = {
-        "min_component_size", "closing_size", "max_expansion_distance"
+        "min_component_size", "small_min_component_size",
+        "closing_size", "max_expansion_distance",
     }
-    image_params = {
-        key: selected_trial.params[key] for key in image_keys
-    }
+    image_params = {key: selected_trial.params[key] for key in image_keys}
     probability_params = {
         key: value for key, value in selected_trial.params.items()
         if key not in image_keys
@@ -209,7 +214,10 @@ def optimize_advanced_model(
     if isinstance(model, BoundarySymmetryFusionModel):
         initial["fusion_weight"] = 0.5
     if isinstance(model, ProtectedHierarchicalFusionModel):
-        initial.update({"hierarchy_weight": 0.75, "core_weight": 1.0})
+        initial.update({
+            "hierarchy_confirmation_threshold": 0.70,
+            "outer_expansion_threshold": 0.75,
+        })
     study.enqueue_trial(initial)
     study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
     selected_trial = _select_trial(study)
@@ -231,8 +239,8 @@ def save_selected_parameters(
     payload = {
         "workflow_version": WORKFLOW_VERSION,
         "selection_rule": (
-            "Maximize validation mean Dice. Baseline image-processing and "
-            "segmentation thresholds are frozen for every advanced model. "
+            "Maximize validation mean Dice. Baseline component, gate and "
+            "expansion parameters are frozen for every advanced model. "
             "Within 0.005 of the maximum, prefer fewer missed tumors, fewer "
             "empty-slice false positives, parameters closer to defaults, "
             "and lower Dice variability."
