@@ -38,8 +38,17 @@ def evaluate_model(
             data = evidence_cache[volume_id]["data"]
             evidence = evidence_cache[volume_id]["evidence"]
         posteriors = model.posteriors_from_evidence(evidence, probability_params)
+        guidance = (
+            model.segmentation_guidance(evidence, probability_params)
+            if hasattr(model, "segmentation_guidance")
+            else None
+        )
         segmentation = segment_posteriors(
-            posteriors, data.brain_mask, image_params, probability_params
+            posteriors,
+            data.brain_mask,
+            image_params,
+            probability_params,
+            guidance=guidance,
         )
         metrics = binary_segmentation_metrics(
             segmentation["prediction"], data.whole_tumor
