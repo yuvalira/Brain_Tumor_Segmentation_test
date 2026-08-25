@@ -20,6 +20,8 @@ def expand_component(
     entropy_threshold,
     posterior_threshold,
     max_expansion_distance,
+    outer_probability=None,
+    outer_expansion_threshold=None,
 ):
     expanded = seed.copy()
     distance = np.full(seed.shape, -1, dtype=np.int32)
@@ -38,16 +40,22 @@ def expand_component(
         if current_distance >= max_expansion_distance:
             continue
         for delta_row, delta_column in NEIGHBORS_8:
-            new_row = row + delta_row
-            new_column = column + delta_column
+            new_row, new_column = row + delta_row, column + delta_column
             if not (0 <= new_row < height and 0 <= new_column < width):
                 continue
             if expanded[new_row, new_column] or not brain_mask[new_row, new_column]:
                 continue
-            if (
+            posterior_growth = (
                 entropy[new_row, new_column] >= entropy_threshold
                 and tumor_posterior[new_row, new_column] >= posterior_threshold
-            ):
+            )
+            outer_growth = (
+                outer_probability is not None
+                and outer_expansion_threshold is not None
+                and outer_probability[new_row, new_column] >= outer_expansion_threshold
+                and tumor_posterior[new_row, new_column] >= 0.5 * posterior_threshold
+            )
+            if posterior_growth or outer_growth:
                 expanded[new_row, new_column] = True
                 distance[new_row, new_column] = current_distance + 1
                 queue.append((new_row, new_column))
@@ -67,6 +75,8 @@ def expand_components(
     entropy_threshold,
     posterior_threshold,
     max_expansion_distance,
+    outer_probability=None,
+    outer_expansion_threshold=None,
 ):
     segmentation = np.zeros(brain_mask.shape, dtype=bool)
     for component_index in range(accepted_components.shape[-1]):
@@ -78,5 +88,7 @@ def expand_components(
             entropy_threshold,
             posterior_threshold,
             max_expansion_distance,
+            outer_probability,
+            outer_expansion_threshold,
         )
     return segmentation
