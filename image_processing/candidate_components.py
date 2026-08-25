@@ -16,9 +16,10 @@ def extract_candidate_components(
     tumor_posterior,
     brain_mask,
     candidate_threshold,
-    min_component_size,
+    small_min_component_size,
     closing_size,
 ):
+    """Extract even small candidates; confidence is assessed downstream."""
     support = (tumor_posterior >= candidate_threshold) & brain_mask
     closing_size = max(int(closing_size), 1)
     if closing_size > 1:
@@ -35,7 +36,7 @@ def extract_candidate_components(
     components = []
     for label_index in range(1, number):
         area = int(statistics[label_index, cv2.CC_STAT_AREA])
-        if area >= int(min_component_size):
+        if area >= int(small_min_component_size):
             components.append(labels == label_index)
 
     if not components:
