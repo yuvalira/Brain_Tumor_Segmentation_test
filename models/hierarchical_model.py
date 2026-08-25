@@ -55,6 +55,13 @@ class BinaryLogGMMBranch:
         result[data.brain_mask] = ratio
         return result
 
+    def save(self, path):
+        joblib.dump(self, path)
+
+    @staticmethod
+    def load(path):
+        return joblib.load(path)
+
 
 @dataclass
 class HierarchicalGMMModel:

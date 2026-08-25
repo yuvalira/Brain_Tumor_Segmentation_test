@@ -55,10 +55,8 @@ def train_hierarchical_branches(train_ids, force=False):
 
     if outer_path.exists() and core_path.exists() and not force:
         return (
-            BinaryLogGMMBranch.load(outer_path)
-            if hasattr(BinaryLogGMMBranch, "load") else __import__("joblib").load(outer_path),
-            BinaryLogGMMBranch.load(core_path)
-            if hasattr(BinaryLogGMMBranch, "load") else __import__("joblib").load(core_path),
+            BinaryLogGMMBranch.load(outer_path),
+            BinaryLogGMMBranch.load(core_path),
         )
 
     outer_samples, _, _ = collect_binary_branch_samples(
@@ -87,8 +85,8 @@ def train_hierarchical_branches(train_ids, force=False):
         name="T1-T1ce core branch",
         seed=RANDOM_SEED + 40,
     )
-    __import__("joblib").dump(outer, outer_path)
-    __import__("joblib").dump(core, core_path)
+    outer.save(outer_path)
+    core.save(core_path)
     return outer, core
 
 
