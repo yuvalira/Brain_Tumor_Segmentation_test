@@ -210,4 +210,11 @@ def save_selected_parameters(
 
 
 def load_selected_parameters(path=SELECTED_PARAMETERS_PATH):
-    return json.loads(Path(path).read_text(encoding="utf-8"))
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    expected = "central_slice_log_gmm_components_v2"
+    if payload.get("workflow_version") != expected:
+        raise ValueError(
+            "Saved parameters belong to an older pipeline. Set "
+            "REUSE_SELECTED_PARAMETERS=False and rerun validation optimization."
+        )
+    return payload
