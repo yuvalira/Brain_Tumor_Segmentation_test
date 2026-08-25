@@ -6,7 +6,7 @@ Classical binary whole-tumor segmentation on BraTS 2020 using only axial slice 8
 
 - **Raw (4D):** log-space multiclass GMM baseline.
 - **Boundary distance (5D):** raw modalities plus relative 2D brain-boundary distance.
-- **Symmetry (8D):** raw modalities plus patient-aligned left-right bilateral NDI.
+- **Symmetry (8D):** raw modalities plus bilateral NDI along the dataset's verified symmetry axis.
 - **Hierarchical modalities:** raw GMM with FLAIR/T2 whole-tumor and T1/T1ce core branches.
 - **Combined:** intensity, boundary distance, symmetry and bounded hierarchical evidence.
 
