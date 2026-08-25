@@ -100,6 +100,8 @@ class ProtectedHierarchicalFusionModel(BoundarySymmetryFusionModel):
         return super().posteriors_from_evidence(evidence, probability_params)
 
     def segmentation_guidance(self, evidence, probability_params):
+        if not probability_params.get("use_hierarchy", True):
+            return None
         brain_mask = evidence["brain_mask"]
         base_log_odds, _ = self._base_maps(evidence, probability_params)
         outer_probability = np.zeros(brain_mask.shape, dtype=np.float64)
