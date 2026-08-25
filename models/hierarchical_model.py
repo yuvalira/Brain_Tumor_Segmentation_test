@@ -7,7 +7,9 @@ from scipy.special import expit
 from sklearn.mixture import GaussianMixture
 
 from config import (
-    GMM_MAX_ITER, GMM_N_INIT, GMM_REG_COVAR, RANDOM_SEED,
+    GMM_MAX_ITER, GMM_N_INIT, GMM_REG_COVAR,
+    HIERARCHY_LOG_RATIO_CLIP, HIERARCHY_STRONG_BASE_NEGATIVE_SCALE,
+    RANDOM_SEED,
 )
 
 
@@ -89,9 +91,22 @@ class HierarchicalGMMModel:
             np.logaddexp(outer, core + np.log(core_weight))
             - np.log1p(core_weight)
         )
+        hierarchy = np.clip(
+            hierarchy, -HIERARCHY_LOG_RATIO_CLIP, HIERARCHY_LOG_RATIO_CLIP
+        )
+        base_log_odds = evidence["tumor_log_odds"]
+        negative_scale = np.where(
+            base_log_odds >= 0.0,
+            HIERARCHY_STRONG_BASE_NEGATIVE_SCALE,
+            1.0,
+        )
+        protected_hierarchy = (
+            np.maximum(hierarchy, 0.0)
+            + negative_scale * np.minimum(hierarchy, 0.0)
+        )
         final_log_odds = (
-            evidence["tumor_log_odds"]
-            + hierarchy_weight * hierarchy
+            base_log_odds
+            + hierarchy_weight * protected_hierarchy
             + offset
         )
 
