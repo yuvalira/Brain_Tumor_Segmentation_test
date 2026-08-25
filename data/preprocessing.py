@@ -59,7 +59,7 @@ def load_preprocessed_slice(volume_id, slice_num=SLICE_NUM, dataset_dir=DATASET_
     if raw_image.ndim != 3 or raw_image.shape[-1] != len(MODALITY_NAMES):
         raise ValueError(f"Expected image shape (H, W, 4), received {raw_image.shape}.")
 
-    brain_mask = np.any(np.abs(raw_image) > EPSILON, axis=-1)
+    brain_mask = np.any(raw_image > EPSILON, axis=-1)
     image = _zscore_channels(raw_image, brain_mask)
     tissue_masks = _tissue_masks(raw_mask) & brain_mask[..., None]
     whole_tumor = np.any(tissue_masks, axis=-1)
