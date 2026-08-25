@@ -28,7 +28,10 @@ def _slug(name):
 
 def train_feature_model(name, feature_kind, train_ids, force=False):
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
-    path = MODEL_DIR / f"{_slug(name)}.joblib"
+    artifact_name = _slug(name)
+    if feature_kind in {"symmetry", "combined"}:
+        artifact_name += "_left_right_midline_v2"
+    path = MODEL_DIR / f"{artifact_name}.joblib"
     if path.exists() and not force:
         return LogSpaceGMMClassifier.load(path)
 
