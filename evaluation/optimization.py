@@ -195,12 +195,11 @@ def save_selected_parameters(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "workflow_version": "central_slice_log_gmm_components_v1",
+        "workflow_version": "central_slice_log_gmm_components_v2",
         "selection_rule": (
             "Maximize validation mean Dice; within 0.005 of the maximum, "
             "prefer fewer missed tumors, fewer empty-slice false positives, "
             "parameters closer to the predefined defaults, and lower Dice variability."
-        )
         ),
         "frozen_image_processing_params": image_params,
         "model_probability_params": model_probability_params,
