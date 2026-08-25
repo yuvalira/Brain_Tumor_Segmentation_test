@@ -63,14 +63,14 @@ def classify_components(
         core_score = _mean_probability(component, core_probability)
         hierarchy_score = 0.75 * outer_score + 0.25 * core_score
         hierarchy_confirmed = (
-            size_eligible
+            area >= int(small_min_component_size)
             and hierarchy_confirmation_threshold is not None
             and score >= threshold - 0.10
             and hierarchy_score >= hierarchy_confirmation_threshold
         )
-        accepted = size_eligible and (
-            protected or score >= threshold or hierarchy_confirmed
-        )
+        accepted = (
+            size_eligible and (protected or score >= threshold)
+        ) or hierarchy_confirmed
         if standard_size:
             gate_score = 0.70 * score + 0.30 * q95
         else:
