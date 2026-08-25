@@ -46,6 +46,7 @@ def segment_posteriors(
         components=components,
         tumor_posterior=tumor_posterior,
         entropy=entropy,
+        brain_mask=brain_mask,
         threshold=probability_params["component_threshold"],
         normal_min_component_size=image_params["min_component_size"],
         small_min_component_size=image_params["small_min_component_size"],

@@ -21,10 +21,19 @@ def _mean_probability(component, probability):
     return float(np.mean(probability[component])) if probability is not None else 0.0
 
 
+def _top_k_mean(probability, mask, count):
+    values = probability[mask]
+    if values.size == 0:
+        return 0.0
+    count = min(max(int(count), 1), values.size)
+    return float(np.mean(np.partition(values, values.size - count)[-count:]))
+
+
 def classify_components(
     components,
     tumor_posterior,
     entropy,
+    brain_mask,
     threshold,
     normal_min_component_size,
     small_min_component_size,
@@ -36,8 +45,11 @@ def classify_components(
     hierarchy_confirmation_threshold=None,
     protection_margin=0.0,
 ):
-    """Classify components, rescue confident small tumors, and gate empty slices."""
+    """Classify components and apply an independent slice-level evidence gate."""
     accepted_components, rows = [], []
+    slice_evidence_score = _top_k_mean(
+        tumor_posterior, brain_mask, normal_min_component_size
+    )
     for component_index in range(components.shape[-1]):
         component = components[..., component_index]
         area = int(component.sum())
@@ -71,13 +83,6 @@ def classify_components(
         accepted = (
             size_eligible and (protected or score >= threshold)
         ) or hierarchy_confirmed
-        if standard_size:
-            gate_score = 0.70 * score + 0.30 * q95
-        else:
-            gate_score = 0.35 * score + 0.65 * q95
-        if hierarchy_confirmed:
-            gate_score = max(gate_score, hierarchy_score)
-
         rows.append({
             "component": component_index,
             "area": area,
@@ -91,18 +96,33 @@ def classify_components(
             "mean_core_probability": core_score,
             "hierarchy_confirmation_score": hierarchy_score,
             "confirmed_by_hierarchy": bool(hierarchy_confirmed),
-            "slice_gate_score": gate_score,
+            "slice_evidence_score": slice_evidence_score,
+            "slice_gate_score": slice_evidence_score,
             "accepted_before_slice_gate": bool(accepted),
         })
         if accepted:
             accepted_components.append(component)
 
-    slice_gate_passed = any(
-        row["accepted_before_slice_gate"]
-        and row["slice_gate_score"] >= float(slice_gate_threshold)
+    has_accepted_component = any(
+        row["accepted_before_slice_gate"] for row in rows
+    )
+    posterior_gate_passed = (
+        has_accepted_component
+        and slice_evidence_score >= float(slice_gate_threshold)
+    )
+    hierarchy_gate_passed = any(
+        row["accepted_before_slice_gate"] and row["confirmed_by_hierarchy"]
         for row in rows
     )
+    slice_gate_passed = posterior_gate_passed or hierarchy_gate_passed
+    gate_source = "+".join(
+        source for source, passed in (
+            ("posterior", posterior_gate_passed),
+            ("hierarchy", hierarchy_gate_passed),
+        ) if passed
+    ) or "failed"
     for row in rows:
+        row["slice_gate_source"] = gate_source
         row["slice_gate_passed"] = bool(slice_gate_passed)
         row["accepted"] = bool(
             row["accepted_before_slice_gate"] and slice_gate_passed

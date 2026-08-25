@@ -16,19 +16,19 @@ from models.fusion_model import (
 )
 
 
-WORKFLOW_VERSION = "central_slice_component_gate_hierarchy_v4"
+WORKFLOW_VERSION = "central_slice_independent_gate_local_expansion_v5"
 _PARAMETER_REFERENCE = {
     **DEFAULT_IMAGE_PROCESSING_PARAMS,
     **DEFAULT_PROBABILITY_PARAMS,
     "fusion_weight": 0.5,
-    "hierarchy_confirmation_threshold": 0.70,
-    "outer_expansion_threshold": 0.75,
+    "hierarchy_confirmation_threshold": 0.60,
+    "outer_expansion_threshold": 0.80,
 }
 _PARAMETER_SCALE = {
     "min_component_size": 50.0,
     "small_min_component_size": 20.0,
     "closing_size": 4.0,
-    "max_expansion_distance": 40.0,
+    "max_expansion_distance": 24.0,
     "log_odds_offset": 6.0,
     "temperature": 0.8,
     "candidate_threshold": 0.40,
@@ -38,8 +38,8 @@ _PARAMETER_SCALE = {
     "entropy_expansion_threshold": 0.30,
     "posterior_expansion_threshold": 0.30,
     "fusion_weight": 0.8,
-    "hierarchy_confirmation_threshold": 0.40,
-    "outer_expansion_threshold": 0.45,
+    "hierarchy_confirmation_threshold": 0.35,
+    "outer_expansion_threshold": 0.30,
 }
 
 
@@ -67,22 +67,22 @@ def _suggest_baseline_probability_params(trial):
         "log_odds_offset": trial.suggest_float("log_odds_offset", -3.0, 3.0),
         "temperature": trial.suggest_float("temperature", 0.7, 1.5),
         "candidate_threshold": trial.suggest_float(
-            "candidate_threshold", 0.10, 0.50
+            "candidate_threshold", 0.15, 0.45
         ),
         "component_threshold": trial.suggest_float(
             "component_threshold", 0.35, 0.75
         ),
         "small_component_q95_threshold": trial.suggest_float(
-            "small_component_q95_threshold", 0.70, 0.98
+            "small_component_q95_threshold", 0.80, 0.98
         ),
         "slice_gate_threshold": trial.suggest_float(
-            "slice_gate_threshold", 0.50, 0.85
+            "slice_gate_threshold", 0.35, 0.75
         ),
         "entropy_expansion_threshold": trial.suggest_float(
-            "entropy_expansion_threshold", 0.05, 0.35
+            "entropy_expansion_threshold", 0.08, 0.30
         ),
         "posterior_expansion_threshold": trial.suggest_float(
-            "posterior_expansion_threshold", 0.05, 0.35
+            "posterior_expansion_threshold", 0.12, 0.35
         ),
     }
 
@@ -97,10 +97,10 @@ def _suggest_advanced_overrides(trial, model):
         )
     if isinstance(model, ProtectedHierarchicalFusionModel):
         overrides["hierarchy_confirmation_threshold"] = trial.suggest_float(
-            "hierarchy_confirmation_threshold", 0.50, 0.90
+            "hierarchy_confirmation_threshold", 0.45, 0.80
         )
         overrides["outer_expansion_threshold"] = trial.suggest_float(
-            "outer_expansion_threshold", 0.55, 0.95
+            "outer_expansion_threshold", 0.70, 0.95
         )
     return overrides
 
@@ -142,7 +142,7 @@ def optimize_baseline(model, validation_ids, n_trials=30):
                 "closing_size", [1, 3, 5]
             ),
             "max_expansion_distance": trial.suggest_int(
-                "max_expansion_distance", 20, 60
+                "max_expansion_distance", 4, 24
             ),
         }
         probability_params = _suggest_baseline_probability_params(trial)
@@ -215,8 +215,8 @@ def optimize_advanced_model(
         initial["fusion_weight"] = 0.5
     if isinstance(model, ProtectedHierarchicalFusionModel):
         initial.update({
-            "hierarchy_confirmation_threshold": 0.70,
-            "outer_expansion_threshold": 0.75,
+            "hierarchy_confirmation_threshold": 0.60,
+            "outer_expansion_threshold": 0.80,
         })
     study.enqueue_trial(initial)
     study.optimize(objective, n_trials=n_trials, show_progress_bar=True)

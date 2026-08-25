@@ -3,6 +3,7 @@ from collections import deque
 
 import cv2
 import numpy as np
+from scipy.ndimage import distance_transform_edt
 
 
 NEIGHBORS_8 = (
@@ -24,6 +25,7 @@ def expand_component(
     outer_expansion_threshold=None,
 ):
     expanded = seed.copy()
+    local_band = distance_transform_edt(~seed) <= float(max_expansion_distance)
     distance = np.full(seed.shape, -1, dtype=np.int32)
     eroded = cv2.erode(
         seed.astype(np.uint8),
@@ -45,6 +47,8 @@ def expand_component(
                 continue
             if expanded[new_row, new_column] or not brain_mask[new_row, new_column]:
                 continue
+            if not local_band[new_row, new_column]:
+                continue
             posterior_growth = (
                 entropy[new_row, new_column] >= entropy_threshold
                 and tumor_posterior[new_row, new_column] >= posterior_threshold
@@ -53,7 +57,7 @@ def expand_component(
                 outer_probability is not None
                 and outer_expansion_threshold is not None
                 and outer_probability[new_row, new_column] >= outer_expansion_threshold
-                and tumor_posterior[new_row, new_column] >= 0.5 * posterior_threshold
+                and tumor_posterior[new_row, new_column] >= posterior_threshold
             )
             if posterior_growth or outer_growth:
                 expanded[new_row, new_column] = True

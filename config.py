@@ -53,15 +53,15 @@ DEFAULT_IMAGE_PROCESSING_PARAMS = {
     "min_component_size": 50,
     "small_min_component_size": 8,
     "closing_size": 3,
-    "max_expansion_distance": 40,
+    "max_expansion_distance": 16,
 }
 DEFAULT_PROBABILITY_PARAMS = {
     "log_odds_offset": 0.0,
     "temperature": 1.0,
-    "candidate_threshold": 0.20,
+    "candidate_threshold": 0.25,
     "component_threshold": 0.50,
-    "small_component_q95_threshold": 0.85,
-    "slice_gate_threshold": 0.62,
-    "entropy_expansion_threshold": 0.10,
-    "posterior_expansion_threshold": 0.10,
+    "small_component_q95_threshold": 0.90,
+    "slice_gate_threshold": 0.55,
+    "entropy_expansion_threshold": 0.14,
+    "posterior_expansion_threshold": 0.20,
 }
