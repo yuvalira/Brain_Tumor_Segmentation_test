@@ -11,27 +11,32 @@ from config import (
     SELECTED_PARAMETERS_PATH,
 )
 from evaluation.evaluate import evaluate_model, prepare_evidence_cache
-from models.hierarchical_model import HierarchicalGMMModel
+from models.fusion_model import (
+    BoundarySymmetryFusionModel, ProtectedHierarchicalFusionModel,
+)
 
 
+WORKFLOW_VERSION = "central_slice_fusion_hierarchy_v3"
 _PARAMETER_REFERENCE = {
     **DEFAULT_IMAGE_PROCESSING_PARAMS,
     **DEFAULT_PROBABILITY_PARAMS,
-    "hierarchy_weight": 1.0,
+    "fusion_weight": 0.5,
+    "hierarchy_weight": 0.75,
     "core_weight": 1.0,
 }
 _PARAMETER_SCALE = {
-    "min_component_size": 55.0,
-    "closing_size": 6.0,
-    "max_expansion_distance": 75.0,
-    "log_odds_offset": 16.0,
-    "temperature": 1.5,
-    "candidate_threshold": 0.50,
-    "component_threshold": 0.60,
-    "entropy_expansion_threshold": 0.48,
-    "posterior_expansion_threshold": 0.43,
-    "hierarchy_weight": 2.0,
-    "core_weight": 3.75,
+    "min_component_size": 50.0,
+    "closing_size": 4.0,
+    "max_expansion_distance": 40.0,
+    "log_odds_offset": 6.0,
+    "temperature": 0.8,
+    "candidate_threshold": 0.40,
+    "component_threshold": 0.40,
+    "entropy_expansion_threshold": 0.30,
+    "posterior_expansion_threshold": 0.30,
+    "fusion_weight": 0.8,
+    "hierarchy_weight": 1.5,
+    "core_weight": 1.75,
 }
 
 
@@ -56,37 +61,52 @@ def _record_selection_diagnostics(trial, summary):
     )
 
 
-def _suggest_probability_params(trial, hierarchical=False):
-    params = {
-        "log_odds_offset": trial.suggest_float("log_odds_offset", -8.0, 8.0),
-        "temperature": trial.suggest_float("temperature", 0.5, 2.0),
+def _suggest_baseline_probability_params(trial):
+    return {
+        "log_odds_offset": trial.suggest_float(
+            "log_odds_offset", -3.0, 3.0
+        ),
+        "temperature": trial.suggest_float("temperature", 0.7, 1.5),
         "candidate_threshold": trial.suggest_float(
-            "candidate_threshold", 0.05, 0.55
+            "candidate_threshold", 0.10, 0.50
         ),
         "component_threshold": trial.suggest_float(
-            "component_threshold", 0.30, 0.90
+            "component_threshold", 0.35, 0.75
         ),
         "entropy_expansion_threshold": trial.suggest_float(
-            "entropy_expansion_threshold", 0.02, 0.50
+            "entropy_expansion_threshold", 0.05, 0.35
         ),
         "posterior_expansion_threshold": trial.suggest_float(
-            "posterior_expansion_threshold", 0.02, 0.45
+            "posterior_expansion_threshold", 0.05, 0.35
         ),
     }
-    if hierarchical:
-        params["hierarchy_weight"] = trial.suggest_float(
-            "hierarchy_weight", 0.0, 2.0
+
+
+def _suggest_advanced_overrides(trial, model):
+    overrides = {
+        "log_odds_offset": trial.suggest_float(
+            "log_odds_offset", -3.0, 3.0
         )
-        params["core_weight"] = trial.suggest_float(
-            "core_weight", 0.25, 4.0, log=True
+    }
+    if isinstance(model, BoundarySymmetryFusionModel):
+        overrides["fusion_weight"] = trial.suggest_float(
+            "fusion_weight", 0.10, 0.90
         )
-    return params
+    if isinstance(model, ProtectedHierarchicalFusionModel):
+        overrides["hierarchy_weight"] = trial.suggest_float(
+            "hierarchy_weight", 0.0, 1.5
+        )
+        overrides["core_weight"] = trial.suggest_float(
+            "core_weight", 0.25, 2.0, log=True
+        )
+    return overrides
 
 
 def _select_trial(study, tolerance=0.005):
     completed = [
         trial for trial in study.trials
-        if trial.value is not None and trial.state == optuna.trial.TrialState.COMPLETE
+        if trial.value is not None
+        and trial.state == optuna.trial.TrialState.COMPLETE
     ]
     best_value = max(trial.value for trial in completed)
     nearly_best = [
@@ -104,22 +124,22 @@ def _select_trial(study, tolerance=0.005):
     )
 
 
-def optimize_baseline(model, validation_ids, n_trials=60):
+def optimize_baseline(model, validation_ids, n_trials=30):
     cache = prepare_evidence_cache(model, validation_ids)
 
     def objective(trial):
         image_params = {
             "min_component_size": trial.suggest_int(
-                "min_component_size", 5, 60
+                "min_component_size", 10, 60
             ),
             "closing_size": trial.suggest_categorical(
-                "closing_size", [1, 3, 5, 7]
+                "closing_size", [1, 3, 5]
             ),
             "max_expansion_distance": trial.suggest_int(
-                "max_expansion_distance", 5, 80
+                "max_expansion_distance", 20, 60
             ),
         }
-        probability_params = _suggest_probability_params(trial)
+        probability_params = _suggest_baseline_probability_params(trial)
         result = evaluate_model(
             model, validation_ids, image_params, probability_params, cache
         )
@@ -154,14 +174,18 @@ def optimize_advanced_model(
     model,
     validation_ids,
     frozen_image_params,
-    n_trials=50,
+    frozen_baseline_probability_params,
+    n_trials=20,
     seed=RANDOM_SEED + 1,
 ):
     cache = prepare_evidence_cache(model, validation_ids)
-    hierarchical = isinstance(model, HierarchicalGMMModel)
 
     def objective(trial):
-        probability_params = _suggest_probability_params(trial, hierarchical)
+        overrides = _suggest_advanced_overrides(trial, model)
+        probability_params = {
+            **frozen_baseline_probability_params,
+            **overrides,
+        }
         result = evaluate_model(
             model,
             validation_ids,
@@ -177,13 +201,23 @@ def optimize_advanced_model(
         direction="maximize",
         sampler=optuna.samplers.TPESampler(seed=seed),
     )
-    initial = dict(DEFAULT_PROBABILITY_PARAMS)
-    if hierarchical:
-        initial.update({"hierarchy_weight": 1.0, "core_weight": 1.0})
+    initial = {
+        "log_odds_offset": frozen_baseline_probability_params[
+            "log_odds_offset"
+        ]
+    }
+    if isinstance(model, BoundarySymmetryFusionModel):
+        initial["fusion_weight"] = 0.5
+    if isinstance(model, ProtectedHierarchicalFusionModel):
+        initial.update({"hierarchy_weight": 0.75, "core_weight": 1.0})
     study.enqueue_trial(initial)
     study.optimize(objective, n_trials=n_trials, show_progress_bar=True)
     selected_trial = _select_trial(study)
-    return selected_trial.params, study, selected_trial
+    probability_params = {
+        **frozen_baseline_probability_params,
+        **selected_trial.params,
+    }
+    return probability_params, study, selected_trial
 
 
 def save_selected_parameters(
@@ -195,11 +229,13 @@ def save_selected_parameters(
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "workflow_version": "central_slice_log_gmm_components_v2",
+        "workflow_version": WORKFLOW_VERSION,
         "selection_rule": (
-            "Maximize validation mean Dice; within 0.005 of the maximum, "
-            "prefer fewer missed tumors, fewer empty-slice false positives, "
-            "parameters closer to the predefined defaults, and lower Dice variability."
+            "Maximize validation mean Dice. Baseline image-processing and "
+            "segmentation thresholds are frozen for every advanced model. "
+            "Within 0.005 of the maximum, prefer fewer missed tumors, fewer "
+            "empty-slice false positives, parameters closer to defaults, "
+            "and lower Dice variability."
         ),
         "frozen_image_processing_params": image_params,
         "model_probability_params": model_probability_params,
@@ -211,8 +247,7 @@ def save_selected_parameters(
 
 def load_selected_parameters(path=SELECTED_PARAMETERS_PATH):
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    expected = "central_slice_log_gmm_components_v2"
-    if payload.get("workflow_version") != expected:
+    if payload.get("workflow_version") != WORKFLOW_VERSION:
         raise ValueError(
             "Saved parameters belong to an older pipeline. Set "
             "REUSE_SELECTED_PARAMETERS=False and rerun validation optimization."
