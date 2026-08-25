@@ -128,22 +128,42 @@ def plot_qualitative_examples(selected, baseline_details, proposed_details, outp
 
 def plot_pipeline_diagnostic(details, output_path=None):
     data = details["data"]
+    base_posterior = details.get("base_tumor_posterior")
+    hierarchy_probability = details.get("hierarchy_probability")
+    if base_posterior is None:
+        base_posterior = details["tumor_posterior"]
+    if hierarchy_probability is None:
+        hierarchy_probability = np.zeros(data.brain_mask.shape)
+    accepted = (
+        np.any(details["accepted_components"], axis=-1)
+        if details["accepted_components"].shape[-1]
+        else np.zeros(data.brain_mask.shape)
+    )
     masks = [
         data.image[..., 3],
+        base_posterior,
+        hierarchy_probability,
         details["tumor_posterior"],
         details["entropy"],
         details["edge_map"],
         details["candidate_support"],
-        np.any(details["accepted_components"], axis=-1)
-        if details["accepted_components"].shape[-1] else np.zeros(data.brain_mask.shape),
+        accepted,
         details["prediction"],
         data.whole_tumor,
     ]
     titles = [
-        "FLAIR", "Tumor posterior", "Entropy", "Sobel diagnostic",
-        "Posterior support", "Accepted components", "Expanded mask", "Ground truth",
+        "FLAIR",
+        "Boundary-symmetry fusion",
+        "Hierarchy probability",
+        "Guided tumor posterior",
+        "Entropy",
+        "Sobel diagnostic",
+        "Candidate support",
+        "Accepted components",
+        "Expanded mask",
+        "Ground truth",
     ]
-    figure, axes = plt.subplots(2, 4, figsize=(14, 7))
+    figure, axes = plt.subplots(2, 5, figsize=(17, 7))
     for axis, image, title in zip(axes.flat, masks, titles):
         axis.imshow(image, cmap="gray")
         axis.set_title(title)
